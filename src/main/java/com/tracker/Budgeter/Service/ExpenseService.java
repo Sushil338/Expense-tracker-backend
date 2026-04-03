@@ -27,14 +27,17 @@ public class ExpenseService {
     // ============================================================
 
     public Double calculateDailyAverage(User user) {
-        long daysCount = expenseRepository.countUniqueDays(user);
+        Map<String, Object> overview = getMonthlyOverview(user);
+        double remaining = (double) overview.getOrDefault("remainingBudget", 0.0);
 
-        if (daysCount == 0) return 0.0;
+        LocalDate now = LocalDate.now();
+        int daysInMonth = now.lengthOfMonth();
+        int dayOfMonth = now.getDayOfMonth();
 
-        Double totalAmount = expenseRepository.sumTotalAmount(user);
-        if (totalAmount == null) totalAmount = 0.0;
+        // Days remaining including today
+        int daysRemaining = daysInMonth - dayOfMonth + 1;
 
-        return totalAmount / daysCount;
+        return (remaining <= 0) ? 0.0 : remaining / daysRemaining;
     }
 
     public List<CategorySum> getChartData(User user) {
@@ -93,35 +96,32 @@ public class ExpenseService {
     // ============================================================
 
     public Map<String, Object> getFilteredDashboard(User user, LocalDateTime start, LocalDateTime end) {
-        // 1. Fetch the filtered list from the database
         List<Expense> expenses = expenseRepository.findByUserAndDateBetweenOrderByDateDesc(user, start, end);
         if (expenses == null) expenses = new ArrayList<>();
 
-        // 2. Calculate the Total Amount Spent for this range
-        double total = expenses.stream()
-                .mapToDouble(Expense::getAmount)
-                .sum();
+        // 1. Calculate total for the filtered range
+        double rangeTotal = expenses.stream().mapToDouble(Expense::getAmount).sum();
 
-        // 3. Optional: Calculate Daily Average safely if you still want it available
-        // We use a helper to ensure we handle any Date type correctly
-        long uniqueDays = expenses.stream()
-                .map(e -> {
-                    // This handles LocalDateTime, java.util.Date, or Timestamp safely
-                    return e.getDate().toString().split("T")[0];
-                })
-                .distinct()
-                .count();
+        // 2. GET MONTHLY OVERVIEW for budget logic
+        Map<String, Object> monthlyOverview = getMonthlyOverview(user);
+        double remainingBudget = (double) monthlyOverview.get("remainingBudget");
 
-        double dailyAvg = (uniqueDays == 0) ? 0.0 : total / uniqueDays;
+        // 3. CALCULATE DAYS REMAINING
+        LocalDate now = LocalDate.now();
+        int daysInMonth = now.lengthOfMonth();
+        int daysRemaining = daysInMonth - now.getDayOfMonth() + 1;
 
-        // 4. ✅ CHART DATA: Group by category name
+        // 4. CALCULATE SAFE DAILY LIMIT
+        // This replaces the old "All-time average" logic
+        double safeDailyLimit = (remainingBudget <= 0) ? 0.0 : remainingBudget / daysRemaining;
+
+        // 5. CHART DATA
         Map<String, Double> categoryMap = expenses.stream()
                 .collect(Collectors.groupingBy(
-                        e -> e.getCategory().getName(),
+                        e -> e.getCategory() != null ? e.getCategory().getName() : "General",
                         Collectors.summingDouble(Expense::getAmount)
                 ));
 
-        // 5. Convert to List<Map> for frontend compatibility
         List<Map<String, Object>> chartData = categoryMap.entrySet().stream()
                 .map(entry -> {
                     Map<String, Object> map = new HashMap<>();
@@ -131,11 +131,10 @@ public class ExpenseService {
                 })
                 .collect(Collectors.toList());
 
-        // 6. Return the map with the "total" key for your React frontend
         Map<String, Object> response = new HashMap<>();
         response.put("expenses", expenses);
-        response.put("total", total);           // Use this for the "Total Spent" display
-        response.put("dailyAverage", dailyAvg); // Keep original logic for non-filtered view
+        response.put("total", rangeTotal);
+        response.put("dailyAverage", safeDailyLimit); // Now correctly shows Rs 88.88 instead of 1650
         response.put("chartData", chartData);
         response.put("start", start);
         response.put("end", end);

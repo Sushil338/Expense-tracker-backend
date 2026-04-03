@@ -91,7 +91,7 @@
 			<scope>runtime</scope>
 		</dependency>
 
-<!--		LOMBOK for fewer bilerplates   -->
+<!--		LOMBOK for fewer boilerplates   -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
