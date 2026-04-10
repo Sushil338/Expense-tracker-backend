@@ -1,10 +1,8 @@
 package com.tracker.Budgeter.Controller;
 
-import com.tracker.Budgeter.Model.MonthlyExtraBudgetRequest;
 import com.tracker.Budgeter.Model.UpdateUserRequest;
 import com.tracker.Budgeter.Model.User;
 import com.tracker.Budgeter.Repository.UserRepository;
-import com.tracker.Budgeter.Service.ExpenseService;
 import com.tracker.Budgeter.Service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -28,9 +26,6 @@ public class AuthController {
 
     @Autowired
     private JwtService jwtService;
-
-    @Autowired
-    private ExpenseService expenseService;
 
     @Autowired
     private AuthenticationManager authenticationManager;
@@ -112,38 +107,6 @@ public class AuthController {
 
         return ResponseEntity.ok(buildUserResponse(user));
     }
-
-    @PostMapping("/extra-budget")
-    public ResponseEntity<?> addExtraBudget(@RequestBody MonthlyExtraBudgetRequest request, Principal principal) {
-        if (principal == null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", "Unauthorized");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-        }
-
-        User user = userRepository.findByUsername(principal.getName()).orElse(null);
-
-        if (user == null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", "User not found");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
-        }
-
-        try {
-            User updatedUser = expenseService.addExtraBudget(user, request.getAmount());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Extra budget added successfully");
-            response.put("user", buildUserResponse(updatedUser));
-
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
 
     @PutMapping("/update/{id}")
     public ResponseEntity<?> updateUser( @PathVariable Long id, @RequestBody UpdateUserRequest request) {

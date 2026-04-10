@@ -2,6 +2,7 @@ package com.tracker.Budgeter.Controller;
 
 import com.tracker.Budgeter.Model.Category;
 import com.tracker.Budgeter.Model.Expense;
+import com.tracker.Budgeter.Model.MonthlyExtraBudgetRequest;
 import com.tracker.Budgeter.Model.User;
 import com.tracker.Budgeter.Repository.CategoryRepository;
 import com.tracker.Budgeter.Repository.CategorySum;
@@ -10,12 +11,14 @@ import com.tracker.Budgeter.Repository.UserRepository;
 import com.tracker.Budgeter.Service.ExpenseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,6 +45,18 @@ public class ExpenseController {
     private User getAuthenticatedUser(Principal principal) {
         return userRepository.findByUsername(principal.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private Map<String, Object> buildUserResponse(User user) {
+        Map<String, Object> userResponse = new HashMap<>();
+        userResponse.put("id", user.getId());
+        userResponse.put("username", user.getUsername());
+        userResponse.put("email", user.getEmail());
+        userResponse.put("monthlyBudget", user.getMonthlyBudget());
+        userResponse.put("currentMonthExtraBudget", user.getCurrentMonthExtraBudget());
+        userResponse.put("extraBudgetMonth", user.getExtraBudgetMonth());
+        userResponse.put("extraBudgetYear", user.getExtraBudgetYear());
+        return userResponse;
     }
 
     // ============================================================
@@ -130,6 +145,25 @@ public class ExpenseController {
         } catch (Exception e) {
             System.out.println("ERROR ADDING EXPENSE: " + e.getMessage());
             return ResponseEntity.internalServerError().body("An error occurred while saving the expense.");
+        }
+    }
+
+    @PostMapping("/extra-budget")
+    public ResponseEntity<?> addExtraBudget(@RequestBody MonthlyExtraBudgetRequest request, Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            User user = getAuthenticatedUser(principal);
+            User updatedUser = expenseService.addExtraBudget(user, request.getAmount());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Extra budget added successfully",
+                    "user", buildUserResponse(updatedUser)
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
     }
 
